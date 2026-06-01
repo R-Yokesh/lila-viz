@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>LILA BLACK — Player Journey Visualizer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@400;600;700;900&display=swap');
+
+  :root {
+    --bg: #080c10;
+    --panel: #0d1117;
+    --border: #1c2a38;
+    --accent: #00e5ff;
+    --accent2: #ff3c5f;
+    --gold: #ffd23f;
+    --green: #39ff14;
+    --text: #c9d8e8;
+    --dim: #4a6070;
+    --human: #00e5ff;
+    --bot: #ff6b35;
+    --kill: #ff3c5f;
+    --death: #a855f7;
+    --loot: #ffd23f;
+    --storm: #39ff14;
+    --botkill: #f97316;
+    --botkilled: #ec4899;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: 'Barlow Condensed', sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* TOP BAR */
+  #topbar {
+    display: flex; align-items: center; gap: 16px; padding: 10px 18px;
+    background: var(--panel); border-bottom: 1px solid var(--border);
+    flex-shrink: 0; flex-wrap: wrap;
+  }
+  #topbar h1 { font-size: 22px; font-weight: 900; letter-spacing: 3px; color: var(--accent); text-transform: uppercase; white-space: nowrap; }
+  #topbar h1 span { color: var(--accent2); }
+
+  .ctrl-group { display: flex; align-items: center; gap: 8px; }
+  .ctrl-group label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; }
+  select, button {
+    background: #111820; color: var(--text); border: 1px solid var(--border);
+    padding: 5px 10px; font-family: 'Barlow Condensed', sans-serif; font-size: 13px;
+    border-radius: 3px; cursor: pointer; transition: border-color 0.2s;
+  }
+  select:focus, select:hover { border-color: var(--accent); outline: none; }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.active { border-color: var(--accent); color: var(--accent); background: rgba(0,229,255,0.08); }
+  button.danger.active { border-color: var(--accent2); color: var(--accent2); background: rgba(255,60,95,0.08); }
+
+  #stats-bar { margin-left: auto; display: flex; gap: 16px; font-family: 'Share Tech Mono', monospace; font-size: 11px; }
+  .stat { display: flex; flex-direction: column; align-items: flex-end; }
+  .stat-val { font-size: 16px; color: var(--accent); }
+  .stat-lbl { color: var(--dim); font-size: 9px; text-transform: uppercase; }
+
+  /* MAIN LAYOUT */
+  #main { display: flex; flex: 1; overflow: hidden; }
+
+  /* SIDEBAR */
+  #sidebar {
+    width: 240px; flex-shrink: 0; background: var(--panel);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  #sidebar-header { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  #sidebar-header h2 { font-size: 11px; letter-spacing: 2px; color: var(--dim); text-transform: uppercase; }
+  #match-list { flex: 1; overflow-y: auto; }
+  #match-list::-webkit-scrollbar { width: 4px; }
+  #match-list::-webkit-scrollbar-track { background: transparent; }
+  #match-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .match-item {
+    padding: 10px 14px; border-bottom: 1px solid rgba(28,42,56,0.5);
+    cursor: pointer; transition: background 0.15s;
+  }
+  .match-item:hover { background: rgba(0,229,255,0.05); }
+  .match-item.active { background: rgba(0,229,255,0.1); border-left: 2px solid var(--accent); }
+  .match-id { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--accent); margin-bottom: 3px; }
+  .match-meta { font-size: 11px; color: var(--dim); }
+  .match-meta span { color: var(--text); }
+
+  /* MAP AREA */
+  #map-area { flex: 1; position: relative; overflow: hidden; background: #050810; }
+  #minimap-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0.7; user-select: none; }
+  #canvas-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+  #heatmap-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0.6; }
+
+  /* BOTTOM TIMELINE */
+  #timeline-bar {
+    background: var(--panel); border-top: 1px solid var(--border);
+    padding: 10px 18px; flex-shrink: 0;
+  }
+  #timeline-controls { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  #play-btn { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 1px solid var(--accent); color: var(--accent); flex-shrink: 0; }
+  #play-btn:hover { background: rgba(0,229,255,0.1); }
+  #time-display { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--accent); min-width: 80px; }
+  #speed-btn { font-size: 11px; padding: 3px 8px; }
+  #timeline-slider { flex: 1; accent-color: var(--accent); cursor: pointer; height: 3px; }
+  #event-track { height: 20px; position: relative; background: rgba(255,255,255,0.03); border-radius: 2px; overflow: hidden; }
+
+  /* LEGEND */
+  #legend {
+    position: absolute; bottom: 14px; right: 14px;
+    background: rgba(8,12,16,0.9); border: 1px solid var(--border);
+    padding: 10px 12px; border-radius: 4px; font-size: 11px; min-width: 160px;
+  }
+  #legend h3 { font-size: 9px; letter-spacing: 2px; color: var(--dim); text-transform: uppercase; margin-bottom: 8px; }
+  .legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .legend-line { width: 20px; height: 2px; flex-shrink: 0; border-radius: 1px; }
+
+  /* HEATMAP CONTROLS */
+  #heatmap-controls {
+    position: absolute; top: 14px; right: 14px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  #heatmap-controls button { font-size: 11px; padding: 4px 10px; }
+
+  /* LOADING */
+  #loading {
+    position: fixed; inset: 0; background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 1000; gap: 16px;
+  }
+  #loading h2 { font-size: 28px; font-weight: 900; letter-spacing: 4px; color: var(--accent); }
+  #loading p { color: var(--dim); font-size: 14px; letter-spacing: 2px; }
+  .loader-bar { width: 200px; height: 2px; background: var(--border); border-radius: 1px; overflow: hidden; }
+  .loader-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; animation: load 1.5s ease-in-out infinite; }
+  @keyframes load { 0%{width:0%} 50%{width:80%} 100%{width:100%} }
+
+  #no-match { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px; color: var(--dim); }
+  #no-match h3 { font-size: 20px; letter-spacing: 3px; }
+  #no-match p { font-size: 13px; }
+
+  option { background: #111820; }
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <h2>LILA BLACK</h2>
+  <p>LOADING TELEMETRY DATA...</p>
+  <div class="loader-bar"><div class="loader-fill"></div></div>
+</div>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <h1>LILA <span>BLACK</span></h1>
+
+  <div class="ctrl-group">
+    <label>Map</label>
+    <select id="map-select">
+      <option value="AmbroseValley">Ambrose Valley</option>
+      <option value="GrandRift">Grand Rift</option>
+      <option value="Lockdown">Lockdown</option>
+    </select>
+  </div>
+
+  <div class="ctrl-group">
+    <label>Day</label>
+    <select id="day-select">
+      <option value="">All Days</option>
+      <option value="February_10">Feb 10</option>
+      <option value="February_11">Feb 11</option>
+      <option value="February_12">Feb 12</option>
+      <option value="February_13">Feb 13</option>
+      <option value="February_14">Feb 14</option>
+    </select>
+  </div>
+
+  <div class="ctrl-group">
+    <label>Show</label>
+    <button id="toggle-humans" class="active" onclick="toggleFilter('humans')">Humans</button>
+    <button id="toggle-bots" class="active" onclick="toggleFilter('bots')">Bots</button>
+    <button id="toggle-paths" class="active" onclick="toggleFilter('paths')">Paths</button>
+    <button id="toggle-events" class="active" onclick="toggleFilter('events')">Events</button>
+  </div>
+
+  <div id="stats-bar">
+    <div class="stat"><span class="stat-val" id="stat-matches">—</span><span class="stat-lbl">Matches</span></div>
+    <div class="stat"><span class="stat-val" id="stat-humans">—</span><span class="stat-lbl">Humans</span></div>
+    <div class="stat"><span class="stat-val" id="stat-bots">—</span><span class="stat-lbl">Bots</span></div>
+    <div class="stat"><span class="stat-val" id="stat-events">—</span><span class="stat-lbl">Events</span></div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <h2>Matches <span id="match-count" style="color:var(--accent)"></span></h2>
+    </div>
+    <div id="match-list"></div>
+  </div>
+
+  <div id="map-area">
+    <div id="no-match" style="display:none">
+      <h3>SELECT A MATCH</h3>
+      <p>Choose a match from the list to visualize</p>
+    </div>
+    <img id="minimap-img" src="" alt="minimap"/>
+    <canvas id="heatmap-canvas"></canvas>
+    <canvas id="canvas-overlay"></canvas>
+
+    <div id="heatmap-controls">
+      <button id="hm-off" class="active" onclick="setHeatmap('off')">Heatmap OFF</button>
+      <button id="hm-kills" onclick="setHeatmap('kills')">Kill Zones</button>
+      <button id="hm-deaths" onclick="setHeatmap('deaths')">Death Zones</button>
+      <button id="hm-traffic" onclick="setHeatmap('traffic')">Traffic</button>
+    </div>
+
+    <div id="legend">
+      <h3>Legend</h3>
+      <div class="legend-row"><div class="legend-line" style="background:var(--human)"></div><span>Human Path</span></div>
+      <div class="legend-row"><div class="legend-line" style="background:var(--bot)"></div><span>Bot Path</span></div>
+      <div class="legend-row"><div class="legend-dot" style="background:var(--kill)"></div><span>Kill / BotKill</span></div>
+      <div class="legend-row"><div class="legend-dot" style="background:var(--death)"></div><span>Killed / BotKilled</span></div>
+      <div class="legend-row"><div class="legend-dot" style="background:var(--loot)"></div><span>Loot</span></div>
+      <div class="legend-row"><div class="legend-dot" style="background:var(--storm)"></div><span>Storm Death</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- TIMELINE -->
+<div id="timeline-bar">
+  <div id="timeline-controls">
+    <button id="play-btn" onclick="togglePlay()">▶</button>
+    <span id="time-display">00:00</span>
+    <input id="timeline-slider" type="range" min="0" max="100" value="0" oninput="onSlider(this.value)"/>
+    <button id="speed-btn" onclick="cycleSpeed()">1×</button>
+    <span style="font-size:11px;color:var(--dim)" id="timeline-hint">Select a match to enable playback</span>
+  </div>
+  <div id="event-track"></div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────
+const STATE = {
+  mapId: 'AmbroseValley',
+  day: '',
+  allData: {},      // map_id -> matches[]
+  matches: [],      // filtered matches for sidebar
+  currentMatch: null,
+  heatmapMode: 'off',
+  filters: { humans: true, bots: true, paths: true, events: true },
+  playback: { playing: false, t: 0, maxT: 0, speed: 1, raf: null }
+};
+
+const MINIMAPS = {
+  AmbroseValley: 'minimaps/AmbroseValley_Minimap.png',
+  GrandRift:     'minimaps/GrandRift_Minimap.png',
+  Lockdown:      'minimaps/Lockdown_Minimap.jpg',
+};
+
+// ── Canvas ─────────────────────────────────────────────────────────
+const mapArea = document.getElementById('map-area');
+const canvas  = document.getElementById('canvas-overlay');
+const hmCanvas = document.getElementById('heatmap-canvas');
+const ctx     = canvas.getContext('2d');
+const hmCtx   = hmCanvas.getContext('2d');
+const mapImg  = document.getElementById('minimap-img');
+
+function resizeCanvas() {
+  const r = mapArea.getBoundingClientRect();
+  canvas.width  = hmCanvas.width  = r.width;
+  canvas.height = hmCanvas.height = r.height;
+  redraw();
+}
+
+// Convert 0-1024 data coords -> canvas pixels
+function toCanvas(dx, dy) {
+  const r = mapArea.getBoundingClientRect();
+  const imgW = 1024, imgH = 1024;
+  // image is contained within mapArea, calculate actual rendered size
+  const scale = Math.min(r.width / imgW, r.height / imgH);
+  const offX = (r.width  - imgW * scale) / 2;
+  const offY = (r.height - imgH * scale) / 2;
+  return [dx * scale + offX, dy * scale + offY];
+}
+
+// ── Data loading ───────────────────────────────────────────────────
+async function loadMap(mapId) {
+  if (STATE.allData[mapId]) return;
+  const res = await fetch(`data/${mapId}.json`);
+  STATE.allData[mapId] = await res.json();
+}
+
+// ── Sidebar ────────────────────────────────────────────────────────
+function buildMatchList() {
+  const day = STATE.day;
+  const all = STATE.allData[STATE.mapId] || [];
+  STATE.matches = day ? all.filter(m => m.day === day) : all;
+
+  document.getElementById('match-count').textContent = `(${STATE.matches.length})`;
+  document.getElementById('stat-matches').textContent = STATE.matches.length;
+
+  let totalH = 0, totalB = 0, totalE = 0;
+
+  const ul = document.getElementById('match-list');
+  ul.innerHTML = '';
+  STATE.matches.forEach((m, i) => {
+    const humans = new Set(), bots = new Set();
+    let events = 0;
+    m.events.forEach(e => {
+      if (e.is_bot) bots.add(e.user_id); else humans.add(e.user_id);
+      if (!['Position','BotPosition'].includes(e.event)) events++;
+    });
+    totalH += humans.size; totalB += bots.size; totalE += events;
+
+    const div = document.createElement('div');
+    div.className = 'match-item';
+    div.innerHTML = `
+      <div class="match-id">${m.match_id.substring(0,8)}…</div>
+      <div class="match-meta">
+        ${m.day.replace('February_','Feb ')} &nbsp;·&nbsp;
+        <span style="color:var(--human)">${humans.size}H</span>
+        <span style="color:var(--bot)"> ${bots.size}B</span>
+        &nbsp;·&nbsp; <span>${m.events.length}</span> pts
+      </div>`;
+    div.onclick = () => selectMatch(i);
+    ul.appendChild(div);
+  });
+
+  document.getElementById('stat-humans').textContent = totalH;
+  document.getElementById('stat-bots').textContent = totalB;
+  document.getElementById('stat-events').textContent = totalE;
+}
+
+// ── Select match ───────────────────────────────────────────────────
+function selectMatch(idx) {
+  document.querySelectorAll('.match-item').forEach((el,i) => el.classList.toggle('active', i===idx));
+  STATE.currentMatch = STATE.matches[idx];
+  stopPlayback();
+  STATE.playback.t = 0;
+
+  const events = STATE.currentMatch.events;
+  const maxT = Math.max(...events.map(e => e.t));
+  STATE.playback.maxT = maxT;
+  document.getElementById('timeline-slider').max = maxT;
+  document.getElementById('timeline-slider').value = 0;
+  document.getElementById('timeline-hint').textContent = `Duration: ${fmtTime(maxT)}`;
+  document.getElementById('no-match').style.display = 'none';
+
+  buildEventTrack(events);
+  if (STATE.heatmapMode !== 'off') drawHeatmap();
+  redraw();
+}
+
+// ── Playback ───────────────────────────────────────────────────────
+const SPEEDS = [0.5, 1, 2, 5, 10];
+let speedIdx = 1;
+
+function togglePlay() {
+  if (!STATE.currentMatch) return;
+  STATE.playback.playing = !STATE.playback.playing;
+  document.getElementById('play-btn').textContent = STATE.playback.playing ? '⏸' : '▶';
+  if (STATE.playback.playing) {
+    lastTime = null; // ← reset so first frame initializes cleanly
+    requestAnimationFrame(animate); // ← use rAF, not animate() directly
+  }
+}
+
+
+function stopPlayback() {
+  STATE.playback.playing = false;
+  document.getElementById('play-btn').textContent = '▶';
+  cancelAnimationFrame(STATE.playback.raf);
+}
+
+let lastTime = null;
+function animate(ts) {
+  if (!STATE.playback.playing) return;
+  if (lastTime === null) {
+    lastTime = ts; // first frame: just record time, don't advance
+    STATE.playback.raf = requestAnimationFrame(animate);
+    return;
+  }
+  const dt = (ts - lastTime) / 1000;
+  lastTime = ts;
+  STATE.playback.t += dt * 1000 * STATE.playback.speed;
+  if (STATE.playback.t >= STATE.playback.maxT) {
+    STATE.playback.t = STATE.playback.maxT;
+    stopPlayback();
+    updateTimeDisplay();
+    redraw();
+    return;
+  }
+  document.getElementById('timeline-slider').value = STATE.playback.t;
+  updateTimeDisplay();
+  redraw();
+  STATE.playback.raf = requestAnimationFrame(animate);
+}
+
+function onSlider(val) {
+  STATE.playback.t = +val;
+  updateTimeDisplay();
+  redraw();
+}
+
+function cycleSpeed() {
+  speedIdx = (speedIdx + 1) % SPEEDS.length;
+  STATE.playback.speed = SPEEDS[speedIdx];
+  document.getElementById('speed-btn').textContent = SPEEDS[speedIdx] + '×';
+}
+
+function updateTimeDisplay() {
+  document.getElementById('time-display').textContent = fmtTime(STATE.playback.t);
+}
+
+function fmtTime(ms) {
+  const s = Math.floor(ms / 1000);
+  return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+}
+
+// ── Event track (mini timeline) ────────────────────────────────────
+function buildEventTrack(events) {
+  const track = document.getElementById('event-track');
+  track.innerHTML = '';
+  const maxT = STATE.playback.maxT || 1;
+  const COLOR = { Kill:'#ff3c5f', Killed:'#a855f7', BotKill:'#f97316', BotKilled:'#ec4899', KilledByStorm:'#39ff14', Loot:'#ffd23f' };
+  events.filter(e => COLOR[e.event]).forEach(e => {
+    const dot = document.createElement('div');
+    dot.style.cssText = `position:absolute;left:${(e.t/maxT*100).toFixed(2)}%;top:4px;width:4px;height:12px;border-radius:1px;background:${COLOR[e.event]};opacity:0.8`;
+    track.appendChild(dot);
+  });
+}
+
+// ── Drawing ────────────────────────────────────────────────────────
+function redraw() {
+  if (!STATE.currentMatch) { ctx.clearRect(0,0,canvas.width,canvas.height); return; }
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  const events = STATE.currentMatch.events;
+  const t = STATE.playback.t;
+  const visible = t === 0 ? events : events.filter(e => e.t <= t);
+
+  // Group by user for paths
+  const players = {};
+  visible.forEach(e => {
+    if (!players[e.user_id]) players[e.user_id] = { is_bot: e.is_bot, positions: [], events: [] };
+    if (['Position','BotPosition'].includes(e.event)) {
+      players[e.user_id].positions.push([e.x, e.y]);
+    } else {
+      players[e.user_id].events.push(e);
+    }
+  });
+
+  // Draw paths
+  if (STATE.filters.paths) {
+    Object.values(players).forEach(p => {
+      if (p.is_bot && !STATE.filters.bots) return;
+      if (!p.is_bot && !STATE.filters.humans) return;
+      const pos = p.positions;
+      if (pos.length < 2) return;
+      ctx.beginPath();
+      ctx.strokeStyle = p.is_bot ? 'rgba(255,107,53,0.5)' : 'rgba(0,229,255,0.4)';
+      ctx.lineWidth = p.is_bot ? 1 : 1.5;
+      const [sx,sy] = toCanvas(pos[0][0], pos[0][1]);
+      ctx.moveTo(sx,sy);
+      for (let i=1; i<pos.length; i++) {
+        const [cx,cy] = toCanvas(pos[i][0], pos[i][1]);
+        ctx.lineTo(cx,cy);
+      }
+      ctx.stroke();
+
+      // Draw current position dot
+      if (pos.length > 0) {
+        const last = pos[pos.length-1];
+        const [lx,ly] = toCanvas(last[0], last[1]);
+        ctx.beginPath();
+        ctx.arc(lx, ly, p.is_bot ? 3 : 4, 0, Math.PI*2);
+        ctx.fillStyle = p.is_bot ? '#ff6b35' : '#00e5ff';
+        ctx.fill();
+      }
+    });
+  }
+
+  // Draw event markers
+  if (STATE.filters.events) {
+    const COLOR = { Kill:'#ff3c5f', Killed:'#a855f7', BotKill:'#f97316', BotKilled:'#ec4899', KilledByStorm:'#39ff14', Loot:'#ffd23f' };
+    const SHAPE = { Kill:'✕', Killed:'✕', BotKill:'✕', BotKilled:'✕', KilledByStorm:'◆', Loot:'●' };
+    visible.filter(e => COLOR[e.event]).forEach(e => {
+      const [px,py] = toCanvas(e.x, e.y);
+      ctx.beginPath();
+      ctx.arc(px, py, 5, 0, Math.PI*2);
+      ctx.fillStyle = COLOR[e.event] + 'cc';
+      ctx.fill();
+      ctx.strokeStyle = COLOR[e.event];
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // Label
+      ctx.fillStyle = '#fff';
+      ctx.font = '8px Share Tech Mono';
+      ctx.textAlign = 'center';
+      ctx.fillText(SHAPE[e.event] || '?', px, py+3);
+    });
+  }
+}
+
+// ── Heatmap ────────────────────────────────────────────────────────
+function setHeatmap(mode) {
+  STATE.heatmapMode = mode;
+  ['off','kills','deaths','traffic'].forEach(m => {
+    document.getElementById(`hm-${m}`).classList.toggle('active', m === mode);
+  });
+  if (mode === 'off') { hmCtx.clearRect(0,0,hmCanvas.width,hmCanvas.height); return; }
+  drawHeatmap();
+}
+
+function drawHeatmap() {
+  hmCtx.clearRect(0,0,hmCanvas.width,hmCanvas.height);
+  if (!STATE.currentMatch) return;
+
+  const mode = STATE.heatmapMode;
+  const events = STATE.currentMatch.events;
+  const KILL_EVENTS  = new Set(['Kill','BotKill']);
+  const DEATH_EVENTS = new Set(['Killed','BotKilled','KilledByStorm']);
+
+  let points = [];
+  if (mode === 'kills')   points = events.filter(e => KILL_EVENTS.has(e.event));
+  else if (mode === 'deaths') points = events.filter(e => DEATH_EVENTS.has(e.event));
+  else points = events.filter(e => ['Position','BotPosition'].includes(e.event));
+
+  if (points.length === 0) return;
+
+  const radius = 40;
+  points.forEach(e => {
+    const [px,py] = toCanvas(e.x, e.y);
+    const grad = hmCtx.createRadialGradient(px,py,0,px,py,radius);
+    if (mode === 'kills') {
+      grad.addColorStop(0, 'rgba(255,60,95,0.25)');
+      grad.addColorStop(1, 'rgba(255,60,95,0)');
+    } else if (mode === 'deaths') {
+      grad.addColorStop(0, 'rgba(168,85,247,0.25)');
+      grad.addColorStop(1, 'rgba(168,85,247,0)');
+    } else {
+      grad.addColorStop(0, 'rgba(0,229,255,0.06)');
+      grad.addColorStop(1, 'rgba(0,229,255,0)');
+    }
+    hmCtx.fillStyle = grad;
+    hmCtx.fillRect(px-radius,py-radius,radius*2,radius*2);
+  });
+}
+
+// ── Filters ────────────────────────────────────────────────────────
+function toggleFilter(key) {
+  STATE.filters[key] = !STATE.filters[key];
+  document.getElementById(`toggle-${key}`).classList.toggle('active', STATE.filters[key]);
+  redraw();
+}
+
+// ── Map/Day change ─────────────────────────────────────────────────
+async function changeMap() {
+  const mapId = document.getElementById('map-select').value;
+  STATE.mapId = mapId;
+  STATE.currentMatch = null;
+  stopPlayback();
+  document.getElementById('no-match').style.display = 'flex';
+  mapImg.src = MINIMAPS[mapId];
+  await loadMap(mapId);
+  buildMatchList();
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  hmCtx.clearRect(0,0,hmCanvas.width,hmCanvas.height);
+}
+
+function changeDay() {
+  STATE.day = document.getElementById('day-select').value;
+  STATE.currentMatch = null;
+  stopPlayback();
+  document.getElementById('no-match').style.display = 'flex';
+  buildMatchList();
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+}
+
+// ── Init ───────────────────────────────────────────────────────────
+async function init() {
+  document.getElementById('map-select').onchange = changeMap;
+  document.getElementById('day-select').onchange = changeDay;
+  window.addEventListener('resize', resizeCanvas);
+  mapImg.onload = resizeCanvas;
+
+  mapImg.src = MINIMAPS['AmbroseValley'];
+  await loadMap('AmbroseValley');
+  buildMatchList();
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('no-match').style.display = 'flex';
+  lastTime = null;
+}
+
+init();
+</script>
+</body>
+</html>
