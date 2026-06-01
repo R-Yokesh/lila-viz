@@ -1,4 +1,3 @@
-Here's a rewritten README that feels like a real developer wrote it:```markdown
 # LILA BLACK — Player Journey Visualizer
 
 Tool for visualizing player movement, fights, loot, and deaths across matches — overlaid directly on the minimap.
